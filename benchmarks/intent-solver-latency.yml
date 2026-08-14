@@ -1,0 +1,170 @@
+# benchmarks/intent-solver-latency.yml
+#
+# OpenChainBench spec: Intent solver & aggregator performance
+# Scope: End-to-end intent fulfillment latency, slippage, fill rate,
+#        and failure breakdown across solvers and aggregators.
+#
+# Chains: Ethereum, Base, Arbitrum, Solana (extendable)
+# Providers: intent solvers and swap aggregators exposing quote + fill APIs
+# Vantage: fixed region(s); identical intent payloads per provider per run.
+# License: MIT (code), CC-BY-4.0 (reports)
+
+slug: intent-solver-latency
+title: "Intent Solver & Aggregator Performance"
+category: intents
+chains:
+  - ethereum
+  - base
+  - arbitrum
+  - solana
+status: draft
+
+description: |
+  End-to-end performance and quality metrics for intent solvers and
+  swap aggregators. Measures latency from intent broadcast to on-chain
+  fulfillment, realized slippage vs quote, fill rate, and failure modes
+  across providers and chains. All metrics are measured continuously
+  from fixed vantage points with identical methodology across providers.
+
+metrics:
+  - name: intent_fulfillment_latency_seconds
+    type: histogram
+    description: |
+      Time from intent broadcast (or order submission) to on-chain
+      fulfillment (tx confirmed at target commitment).
+    labels:
+      - provider
+      - chain
+      - region
+      - intent_type
+      - outcome
+      - failure_reason
+
+  - name: intent_slippage_bps
+    type: histogram
+    description: |
+      Realized slippage in basis points relative to the initial quote
+      (positive = worse than quote, negative = better than quote).
+    labels:
+      - provider
+      - chain
+      - region
+      - intent_type
+      - outcome
+
+  - name: intent_quote_latency_seconds
+    type: histogram
+    description: |
+      Time from quote request to receiving a valid quote from the provider.
+    labels:
+      - provider
+      - chain
+      - region
+      - intent_type
+      - outcome
+
+  - name: intent_fill_rate_ratio
+    type: gauge
+    description: |
+      Rolling fill rate: fraction of intents successfully filled
+      within a configured timeout window (e.g. 60s, 120s).
+    labels:
+      - provider
+      - chain
+      - region
+      - intent_type
+      - window_seconds
+
+  - name: intent_quote_error_bps
+    type: histogram
+    description: |
+      Difference between quoted price and actual execution price
+      in basis points, measured ex-post for filled intents.
+    labels:
+      - provider
+      - chain
+      - region
+      - intent_type
+
+providers:
+  - id: lifi
+    name: "LI.FI"
+    type: aggregator
+    chains:
+      - ethereum
+      - base
+      - arbitrum
+    api_type: rest_and_ws
+    auth_required: false
+  - id: cow
+    name: "CowSwap (Solvers)"
+    type: solver
+    chains:
+      - ethereum
+      - base
+      - arbitrum
+    api_type: rest_and_ws
+    auth_required: false
+  - id: openocean
+    name: "OpenOcean"
+    type: aggregator
+    chains:
+      - ethereum
+      - base
+      - arbitrum
+      - solana
+    api_type: rest
+    auth_required: false
+  - id: oneinch
+    name: "1inch"
+    type: aggregator
+    chains:
+      - ethereum
+      - base
+      - arbitrum
+    api_type: rest_and_ws
+    auth_required: false
+  - id: custom-solver-alpha
+    name: "Custom Solver Alpha"
+    type: solver
+    chains:
+      - ethereum
+      - base
+    api_type: rest
+    auth_required: true
+
+methodology: |
+  - For each provider and chain, the harness constructs a canonical set of
+    intents (swaps, bridges, cross-chain swaps) with fixed parameters:
+    input token, output token, amount, slippage tolerance, and deadline.
+  - For each intent:
+    - Request a quote from the provider (timestamped).
+    - Record quote latency and quoted price.
+    - Broadcast the intent/order using the provider's API.
+    - Monitor on-chain until fulfillment or timeout.
+    - Record fulfillment latency, realized price, and outcome.
+  - Slippage in bps is computed as:
+    ((realized_price - quoted_price) / quoted_price) * 10000.
+  - Fill rate is computed over rolling windows (e.g. 60s, 120s) as:
+    filled_intents / total_intents_attempted.
+  - Failure reasons are classified into: timeout, revert, no_quote,
+    slippage_exceeded, insufficient_liquidity, other.
+  - No averages are reported; only p50, p90, p95, p99, and max latencies,
+    plus fill rates and failure breakdowns.
+
+retention:
+  raw_samples_ttl_days: 7
+  aggregated_metrics_ttl_days: 90
+
+tags:
+  - intents
+  - solvers
+  - aggregators
+  - latency
+  - slippage
+  - fill_rate
+  - cross_chain
+  - ethereum
+  - base
+  - arbitrum
+  - solana
