@@ -7,23 +7,44 @@ on:
     branches: [main]
 
 jobs:
-  lint:
+  build-and-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check go.mod exists
-        run: |
-          if [ ! -f go.mod ]; then
-            echo "go.mod not found"
-            exit 1
-          fi
-          echo "✓ go.mod exists"
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
 
-      - name: Check harness source exists
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build -v -o bin/intent-solver-latency ./...
+
+      - name: Test
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Verify binary
         run: |
-          if [ ! -f harnesses/intent-solver-latency/main.go ]; then
-            echo "Harness source not found"
+          if [ ! -f bin/intent-solver-latency ]; then
+            echo "Binary not generated"
             exit 1
           fi
-          echo "✓ Harness source exists"
+          file bin/intent-solver-latency
+          echo "Binary generated successfully"
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.out
+          flags: unittests
+          fail_ci_if_error: false
